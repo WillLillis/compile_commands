@@ -1,9 +1,21 @@
 [package]
 name = "compile_commands"
 version = "0.1.0"
+authors = ["Will Lillis"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Work with compile_commands.json and compile_flags.txt in Rust programs."
+
+documentation = "https://docs.rs/compile_commands/latest/compile_commands/"
+homepage = "https://github.com/WillLillis/compile_commands"
+repository = "https://github.com/WillLillis/compile_commands"
+
+readme = "README.md"
+
+keywords = ["clang", "llvm", "compile"]
+categories = ["development-tools"]
+publish = true
+license = "Apache-2.0"
 
 [dependencies]
 serde = { version = "1.0.204", features = ["derive"] }
