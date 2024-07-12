@@ -1,17 +1,18 @@
 use std::fmt::{self, Display};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::string::ToString;
 
 use serde::de::{Deserializer, Error as SerdeError, Visitor};
 use serde::Deserialize;
 
-/// Represents a compile_commands.json file
+/// Represents a `compile_commands.json` file
 pub type CompilationDatabase = Vec<CompileCommand>;
 
-/// `All` if `CompilationDatabase` is generated from a compile_flags.txt file,
-/// otherwise `File()` containing the `file` field from a compile_commands.json
+/// `All` if `CompilationDatabase` is generated from a `compile_flags.txt` file,
+/// otherwise `File()` containing the `file` field from a `compile_commands.json`
 /// entry
 #[derive(Debug, Clone)]
-enum SourceFile {
+pub enum SourceFile {
     All,
     File(PathBuf),
 }
@@ -45,34 +46,34 @@ impl<'de> Deserialize<'de> for SourceFile {
     }
 }
 
-/// Represents a single entry within a compile_commands.json file
+/// Represents a single entry within a `compile_commands.json` file
 /// Either arguments or command is required. arguments is preferred, as shell (un)escaping
 /// is a possible source of errors.
 ///
-/// See: https://clang.llvm.org/docs/JSONCompilationDatabase.html#format
+/// See: <https://clang.llvm.org/docs/JSONCompilationDatabase.html#format>
 #[derive(Debug, Clone, Deserialize)]
 pub struct CompileCommand {
     /// The working directory of the compilation. All paths specified in the command
     /// or file fields must be either absolute or relative to this directory.
-    directory: PathBuf,
+    pub directory: PathBuf,
     /// The main translation unit source processed by this compilation step. This
     /// is used by tools as the key into the compilation database. There can be
     /// multiple command objects for the same file, for example if the same source
     /// file is compiled with different configurations.
-    file: SourceFile,
+    pub file: SourceFile,
     /// The compile command argv as list of strings. This should run the compilation
     /// step for the translation unit file. arguments[0] should be the executable
     /// name, such as clang++. Arguments should not be escaped, but ready to pass
     /// to execvp().
-    arguments: Option<Vec<String>>,
+    pub arguments: Option<Vec<String>>,
     /// The compile command as a single shell-escaped string. Arguments may be
     /// shell quoted and escaped following platform conventions, with ‘"’ and ‘\’
     /// being the only special characters. Shell expansion is not supported.
-    command: Option<String>,
+    pub command: Option<String>,
     /// The name of the output created by this compilation step. This field is optional.
     /// It can be used to distinguish different processing modes of the same input
     /// file.
-    output: Option<PathBuf>,
+    pub output: Option<PathBuf>,
 }
 
 impl Display for CompileCommand {
@@ -85,14 +86,14 @@ impl Display for CompileCommand {
                 writeln!(f, "],")?;
             } else {
                 for arg in arguments.iter().take(arguments.len() - 1) {
-                    writeln!(f, "\"{}\", ", arg)?;
+                    writeln!(f, "\"{arg}\", ")?;
                 }
                 writeln!(f, "\"{}\"],", arguments[arguments.len() - 1])?;
             }
         }
 
         if let Some(command) = &self.command {
-            write!(f, "\"command\": \"{}\"", command)?;
+            write!(f, "\"command\": \"{command}\"")?;
         }
 
         if let Some(output) = &self.output {
@@ -108,19 +109,19 @@ impl Display for CompileCommand {
     }
 }
 
-/// For simple projects, Clang tools also recognize a compile_flags.txt file. This
-/// should contain one argument per line. The same flags will be used to compile
-/// any file.
+/// For simple projects, Clang tools also recognize a `compile_flags.txt` file.
+/// This should contain one argument per line. The same flags will be used to
+/// compile any file.
 ///
-/// See: https://clang.llvm.org/docs/JSONCompilationDatabase.html#alternatives
+/// See: <https://clang.llvm.org/docs/JSONCompilationDatabase.html#alternatives>
 ///
-/// This helper allows you to translate the contents of a compile_flags.txt file
+/// This helper allows you to translate the contents of a `compile_flags.txt` file
 /// to a `CompilationDatabase` object
 #[must_use]
-pub fn from_compile_flags_txt(directory: &PathBuf, contents: &str) -> CompilationDatabase {
-    let args = contents.lines().map(|line| line.to_string()).collect();
+pub fn from_compile_flags_txt(directory: &Path, contents: &str) -> CompilationDatabase {
+    let args = contents.lines().map(ToString::to_string).collect();
     vec![CompileCommand {
-        directory: directory.clone(),
+        directory: directory.to_path_buf(),
         file: SourceFile::All,
         arguments: Some(args),
         command: None,
