@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 use std::string::ToString;
@@ -11,7 +12,7 @@ pub type CompilationDatabase = Vec<CompileCommand>;
 /// `All` if `CompilationDatabase` is generated from a `compile_flags.txt` file,
 /// otherwise `File()` containing the `file` field from a `compile_commands.json`
 /// entry
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum SourceFile {
     All,
     File(PathBuf),
@@ -47,14 +48,14 @@ impl<'de> Deserialize<'de> for SourceFile {
 }
 
 /// Represents a single entry within a `compile_commands.json` file
-/// Either arguments or command is required. arguments is preferred, as shell (un)escaping
+/// Either `arguments` or `command` is required. `arguments` is preferred, as shell (un)escaping
 /// is a possible source of errors.
 ///
 /// See: <https://clang.llvm.org/docs/JSONCompilationDatabase.html#format>
 #[derive(Debug, Clone, Deserialize)]
 pub struct CompileCommand {
-    /// The working directory of the compilation. All paths specified in the command
-    /// or file fields must be either absolute or relative to this directory.
+    /// The working directory of the compilation. All paths specified in the `command`
+    /// or `file` fields must be either absolute or relative to this directory.
     pub directory: PathBuf,
     /// The main translation unit source processed by this compilation step. This
     /// is used by tools as the key into the compilation database. There can be
@@ -109,6 +110,49 @@ impl Display for CompileCommand {
     }
 }
 
+impl CompileCommand {
+    /// Transforms the command field, if present, into a `Vec<String>` of equivalent
+    /// arguments
+    ///
+    /// Replaces escaped '"' and '\' characters with their respective literals
+    pub fn args_from_cmd(&self) -> Option<Vec<String>> {
+        let escaped = if let Some(ref cmd) = self.command {
+            // "Arguments may be shell quoted and escaped following platform conventions,
+            // with ‘"’ and ‘\’ being the only special characters."
+            cmd.trim().replace("\\\\", "\\").replace("\\\"", "\"")
+        } else {
+            return None;
+        };
+
+        let mut args = Vec::new();
+        let mut start: usize = 0;
+        let mut end: usize = 0;
+        let mut in_quotes = false;
+
+        for c in escaped.chars() {
+            if c == '"' {
+                in_quotes = !in_quotes;
+                end += 1;
+            } else if c.is_whitespace() && !in_quotes && start != end {
+                args.push(escaped[start..end].to_string());
+                end += 1;
+                start = end;
+            } else {
+                end += 1;
+            }
+        }
+
+        end = max(end, escaped.len() - 1);
+        if start != end {
+            args.push(escaped[start..end].to_string());
+        }
+
+        Some(args)
+    }
+}
+
+// NOTE: Need to write HELLA tests for this
+
 /// For simple projects, Clang tools also recognize a `compile_flags.txt` file.
 /// This should contain one argument per line. The same flags will be used to
 /// compile any file.
@@ -127,4 +171,13 @@ pub fn from_compile_flags_txt(directory: &Path, contents: &str) -> CompilationDa
         command: None,
         output: None,
     }]
+}
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+
+    // TODO: Write tests for:
+    //      - from_compile_flags_txt
+    //      - args_from_cmd
 }
