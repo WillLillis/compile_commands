@@ -6,7 +6,7 @@ Provide a thin wrapper type around the [compile_commands.json](https://clang.llv
 and  [compile_flags.txt](https://clang.llvm.org/docs/JSONCompilationDatabase.html#alternatives)
 standards as provided by the LLVM project.
 
-## Sample usage:
+## Sample usage
 
 Given the following `compile_commands.json` file:
 
