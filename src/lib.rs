@@ -22,6 +22,7 @@ impl<'de> Deserialize<'de> for SourceFile {
     where
         D: Deserializer<'de>,
     {
+        #[allow(dead_code)]
         struct SourceFileVisitor;
 
         impl<'de> Visitor<'de> for SourceFileVisitor {
