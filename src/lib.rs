@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 use std::string::ToString;
@@ -142,7 +141,6 @@ impl CompileCommand {
             }
         }
 
-        end = max(end, escaped.len() - 1);
         if start != end {
             args.push(escaped[start..end].to_string());
         }
@@ -150,8 +148,6 @@ impl CompileCommand {
         Some(args)
     }
 }
-
-// NOTE: Need to write HELLA tests for this
 
 /// For simple projects, Clang tools also recognize a `compile_flags.txt` file.
 /// This should contain one argument per line. The same flags will be used to
@@ -175,9 +171,52 @@ pub fn from_compile_flags_txt(directory: &Path, contents: &str) -> CompilationDa
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use super::*;
 
-    // TODO: Write tests for:
-    //      - from_compile_flags_txt
-    //      - args_from_cmd
+    fn test_args_from_cmd(comp_cmd: &CompileCommand, expected_args: &Vec<&str>) {
+        let translated_args = comp_cmd.args_from_cmd().unwrap();
+
+        assert!(expected_args.len() == translated_args.len());
+        for (expected, actual) in expected_args.iter().zip(translated_args.iter()) {
+            assert!(expected == actual);
+        }
+    }
+
+    #[test]
+    fn it_translates_args_from_empty_cmd() {
+        let comp_cmd = CompileCommand {
+            directory: PathBuf::new(),
+            file: SourceFile::All,
+            arguments: None,
+            command: Some(String::from("")),
+            output: None,
+        };
+
+        let expected_args: Vec<&str> = Vec::new();
+        test_args_from_cmd(&comp_cmd, &expected_args);
+    }
+
+    #[test]
+    fn it_translates_args_from_cmd_1() {
+        let comp_cmd = CompileCommand {
+            directory: PathBuf::new(),
+            file: SourceFile::All,
+            arguments: None,
+            command: Some(String::from(
+                r#"/usr/bin/clang++ -Irelative -DSOMEDEF=\"With spaces, quotes and \\-es.\" -c -o file.o file.cc"#,
+            )),
+            output: None,
+        };
+
+        let expected_args: Vec<&str> = vec![
+            "/usr/bin/clang++",
+            "-Irelative",
+            r#"-DSOMEDEF="With spaces, quotes and \-es.""#,
+            "-c",
+            "-o",
+            "file.o",
+            "file.cc",
+        ];
+        test_args_from_cmd(&comp_cmd, &expected_args);
+    }
 }
