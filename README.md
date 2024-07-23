@@ -51,3 +51,9 @@ fn main() {
     _ = comp_data;
 }
 ```
+
+## Usage in the Wild
+
+### [asm-lsp](https://github.com/bergercookie/asm-lsp)
+
+Used to provide inline error diagnostics and additional er-project include directories
