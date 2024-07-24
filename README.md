@@ -56,4 +56,4 @@ fn main() {
 
 ### [asm-lsp](https://github.com/bergercookie/asm-lsp)
 
-Used to provide inline error diagnostics and additional er-project include directories
+Used to provide inline error diagnostics and additional per-project include directories
