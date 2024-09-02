@@ -2,7 +2,7 @@ use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 use std::string::ToString;
 
-use serde::de::{Deserializer, Error as SerdeError, Visitor};
+use serde::de::{self, Deserializer, Error as SerdeError, Visitor};
 use serde::Deserialize;
 
 /// Represents a `compile_commands.json` file
@@ -47,7 +47,51 @@ impl<'de> Deserialize<'de> for SourceFile {
     }
 }
 
-/// Represents a single entry within a `compile_commands.json` file
+/// The `arguments` field in a `compile_commands.json` file can be invoked as is,
+/// whereas the flags from a `compile_flags.txt` file must be invoked with a compiler,
+/// e.g. gcc @compile_flags.txt. Because the `CompileCommand` struct is used to
+/// represent both file types, we utilize a tagged union here to differentitate
+/// between the two files
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum CompileArgs {
+    Arguments(Vec<String>),
+    Flags(Vec<String>),
+}
+
+impl<'de> Deserialize<'de> for CompileArgs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[allow(dead_code)]
+        struct CompileArgVisitor;
+
+        impl<'de> Visitor<'de> for CompileArgVisitor {
+            type Value = CompileArgs;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string representing a command line argument")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::SeqAccess<'de>,
+            {
+                let mut args = Vec::new();
+
+                while let Some(arg) = seq.next_element::<String>()? {
+                    args.push(arg);
+                }
+
+                Ok(CompileArgs::Arguments(args))
+            }
+        }
+
+        deserializer.deserialize_seq(CompileArgVisitor)
+    }
+}
+
+/// Represents a single entry within a `compile_commands.json` file, or a compile_flags.txt file
 /// Either `arguments` or `command` is required. `arguments` is preferred, as shell (un)escaping
 /// is a possible source of errors.
 ///
@@ -66,7 +110,7 @@ pub struct CompileCommand {
     /// step for the translation unit file. arguments[0] should be the executable
     /// name, such as clang++. Arguments should not be escaped, but ready to pass
     /// to execvp().
-    pub arguments: Option<Vec<String>>,
+    pub arguments: Option<CompileArgs>,
     /// The compile command as a single shell-escaped string. Arguments may be
     /// shell quoted and escaped following platform conventions, with ‘"’ and ‘\’
     /// being the only special characters. Shell expansion is not supported.
@@ -81,16 +125,30 @@ impl Display for CompileCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{{ \"directory\": \"{}\",", self.directory.display())?;
 
-        if let Some(arguments) = &self.arguments {
-            write!(f, "\"arguments\": [")?;
-            if arguments.is_empty() {
-                writeln!(f, "],")?;
-            } else {
-                for arg in arguments.iter().take(arguments.len() - 1) {
-                    writeln!(f, "\"{arg}\", ")?;
+        match &self.arguments {
+            Some(CompileArgs::Arguments(arguments)) => {
+                write!(f, "\"arguments\": [")?;
+                if arguments.is_empty() {
+                    writeln!(f, "],")?;
+                } else {
+                    for arg in arguments.iter().take(arguments.len() - 1) {
+                        writeln!(f, "\"{arg}\", ")?;
+                    }
+                    writeln!(f, "\"{}\"],", arguments[arguments.len() - 1])?;
                 }
-                writeln!(f, "\"{}\"],", arguments[arguments.len() - 1])?;
             }
+            Some(CompileArgs::Flags(flags)) => {
+                write!(f, "\"flags\": [")?;
+                if flags.is_empty() {
+                    writeln!(f, "],")?;
+                } else {
+                    for flag in flags.iter().take(flags.len() - 1) {
+                        writeln!(f, "\"{flag}\", ")?;
+                    }
+                    writeln!(f, "\"{}\"],", flags[flags.len() - 1])?;
+                }
+            }
+            None => {}
         }
 
         if let Some(command) = &self.command {
@@ -160,7 +218,7 @@ impl CompileCommand {
 /// to a `CompilationDatabase` object
 #[must_use]
 pub fn from_compile_flags_txt(directory: &Path, contents: &str) -> CompilationDatabase {
-    let args = contents.lines().map(ToString::to_string).collect();
+    let args = CompileArgs::Flags(contents.lines().map(ToString::to_string).collect());
     vec![CompileCommand {
         directory: directory.to_path_buf(),
         file: SourceFile::All,
